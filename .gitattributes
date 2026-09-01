@@ -1,0 +1,7 @@
+# Keep line endings identical in the repository and in every working copy.
+# The service worker's build stamp is a hash of file bytes, so a checkout that
+# rewrote LF to CRLF would change every hash and make "npm run validate"
+# disagree with itself across machines.
+* text=auto eol=lf
+
+*.png binary

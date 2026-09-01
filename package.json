@@ -1,0 +1,19 @@
+{
+  "name": "hola-supermercado",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first Spanish trainer PWA: static files, no runtime dependencies.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.js",
+    "dev": "node tools/serve.js",
+    "stamp": "node tools/stamp.js",
+    "dist": "node tools/dist.js",
+    "validate": "node tools/validate.js",
+    "test": "node tools/validate.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
