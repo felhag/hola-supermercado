@@ -1,10 +1,18 @@
 // Stamped by "npm run stamp" with a hash of every precached file. "npm run
 // validate" fails when it is stale, because an unchanged service worker keeps
 // serving the old code from cache and app changes never reach the device.
-const BUILD = 'd7ceace8e6';
+const BUILD = 'ba0adbd3cc';
 const CACHE = 'es-trainer-' + BUILD;
 
-const ASSETS = [
+const DECK_INDEX = './data/decks/index.json';
+
+// Everything the app ships except the decks themselves. The deck list is read
+// out of the deck index at install time, so registering a deck in
+// data/decks/index.json is all it takes to have it cached for offline use, and
+// this file never has to be touched to add content. "npm run validate" and
+// "npm run stamp" expand the same index, so the build hash still covers every
+// deck: edit a deck and the cache name changes like any other shipped file.
+const SHELL = [
   './',
   './index.html',
   './styles.css',
@@ -18,30 +26,48 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
-  './data/decks/index.json',
-  './data/decks/verbs.json',
-  './data/decks/people.json',
-  './data/decks/food.json',
-  './data/decks/travel.json',
-  './data/decks/home.json',
-  './data/decks/time.json',
-  './data/decks/adjectives.json',
-  './data/decks/phrases.json',
-  './data/decks/shopping.json',
-  './data/decks/health.json',
-  './data/decks/work.json',
-  './data/decks/weather.json',
-  './data/decks/connectors.json',
-  './data/decks/sentences.json',
-  './data/decks/conjugations.json'
+  DECK_INDEX
 ];
+
+// The index is precached itself, so a worker that starts up offline can still
+// tell which decks to expect from the copy the last install left behind. On a
+// first install there is nothing cached and only the network can answer.
+async function deckIndex(preferNetwork) {
+  if (preferNetwork) {
+    try {
+      const res = await fetch(DECK_INDEX, { cache: 'reload' });
+      if (res.ok) return await res.json();
+    } catch (err) { /* offline: fall through to whatever is cached */ }
+  }
+  const hit = await caches.match(DECK_INDEX, { ignoreSearch: true });
+  if (!hit) return null;
+  try {
+    return await hit.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+// A deck that is registered but unreachable drops out of the list rather than
+// failing the whole resolution: the install then reports fewer cached files,
+// which is exactly what the offline badge is for.
+async function assetList(preferNetwork) {
+  const index = await deckIndex(preferNetwork);
+  const decks = index && Array.isArray(index.decks)
+    ? index.decks.filter((deck) => deck && deck.file).map((deck) => './data/decks/' + deck.file)
+    : [];
+  return SHELL.concat(decks.filter((url) => !SHELL.includes(url)));
+}
 
 // Cache each asset on its own so one bad path cannot fail the whole install and
 // leave the app with nothing offline. The status message reports what landed.
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await Promise.all(ASSETS.map(async (url) => {
+    // Costs one extra request for the index, which cache.add fetches again
+    // below. Cheap once per install, and it keeps the list in one place.
+    const assets = await assetList(true);
+    await Promise.all(assets.map(async (url) => {
       try {
         await cache.add(new Request(url, { cache: 'reload' }));
       } catch (err) { /* reported through the status message instead */ }
@@ -138,11 +164,15 @@ self.addEventListener('message', (event) => {
   if (!port) return;
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
+    // Cache only: a status check must not depend on the network. Until the
+    // index itself is cached the deck files are unknown, but the index is in
+    // SHELL, so that case already counts as incomplete rather than ready.
+    const assets = await assetList(false);
     let cached = 0;
-    for (const url of ASSETS) {
+    for (const url of assets) {
       const hit = await cache.match(url, { ignoreSearch: true });
       if (hit) cached += 1;
     }
-    port.postMessage({ cached, total: ASSETS.length, version: BUILD });
+    port.postMessage({ cached, total: assets.length, version: BUILD });
   })());
 });

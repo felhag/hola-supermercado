@@ -141,9 +141,6 @@ function home() {
       ])
     ]),
     start,
-    total === 0
-      ? el('p', { class: 'small muted', text: 'No decks picked. Tap one below, or use Select all.' })
-      : null,
     planned === 0 && total > 0
       ? el('p', { class: 'small muted', text: 'Everything you picked is scheduled for later. Add a deck below, come back tomorrow, or switch off spacing in settings.' })
       : null,

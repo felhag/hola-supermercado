@@ -129,6 +129,21 @@ button.btn.ghost { background: transparent; }
   font: inherit; color: var(--text);
 }
 .deck[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.deck:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A deck row is a toggle, so hovering should say "this reacts to a tap" without
+   pretending it is a link: the border firms up, the name tints, and an unpicked
+   deck shows a ghost tick of what the click would do. Nothing moves: shifting
+   the row under the cursor is enough to leave the row, which flickers the hover
+   on and off at the edges. Hover only where there is a real pointer, or a phone
+   applies it on tap and it sticks. */
+@media (hover: hover) and (pointer: fine) {
+  .deck { transition: border-color .15s ease, background-color .15s ease; }
+  .deck:hover { border-color: var(--muted); }
+  .deck:hover .deck-name { color: var(--accent); }
+  .deck[aria-pressed="true"]:hover { border-color: var(--accent); }
+  .deck[aria-pressed="false"]:hover .check::before { content: '\2713'; opacity: .35; }
+}
 .deck-name { font-weight: 500; }
 .bar { position: relative; height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
 .bar > span { display: block; height: 100%; background: var(--accent); }
@@ -249,6 +264,7 @@ input.text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (prefers-reduced-motion: reduce) {
   .card.feedback, .card.feedback.no, .card.prompt,
   .card.result, .cheer, .bar.score > span { animation: none; }
+  .deck { transition: none; }
   .confetti { display: none; }
 }
 .error { color: var(--bad); font-size: 14px; }

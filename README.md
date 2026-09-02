@@ -14,12 +14,14 @@ js/srs.js                Leitner boxes
 js/store.js              IndexedDB, with a localStorage fallback
 js/content.js            deck loading, answer matching
 js/ui.js                 tiny DOM helper
-sw.js                    precache list + cache-first fetch
+sw.js                    app shell precache, decks read from the deck index
 manifest.webmanifest
 data/decks/*.json        content
 package.json             npm scripts, no dependencies
 tools/serve.js           dev server for npm start
 tools/validate.js        deck and precache checks for npm run validate
+tools/dist.js            builds _site for the Pages deploy
+.github/workflows/       validate, build and publish on every push to main
 serve.ps1                fallback server for machines without Node
 .nojekyll                stops GitHub Pages running Jekyll over the folder
 ```
@@ -46,32 +48,43 @@ npm run validate
 
 Checks that every deck parses, that card ids are unique across all decks, that no deck
 file is orphaned, that each cloze card has a `___` gap whose full sentence matches the
-answer and whose choices contain it, and that every shipped file is listed in the service
-worker precache. Run it after editing decks: a deck missing from the precache is simply
+answer and whose choices contain it, and that every shipped file is covered by the service
+worker precache. Run it after editing decks: a deck the worker never caches is simply
 absent offline, which is the one failure you cannot debug at 30,000 feet.
 
 ## Publish to GitHub Pages
 
+Pushing to `main` runs `.github/workflows/deploy.yml`, which validates the content,
+builds `_site` with `npm run dist`, and publishes that folder to the `gh-pages` branch.
+The deploy can also be started by hand from the Actions tab.
+
 ```
-git init
-git add .
-git commit -m "Spanish trainer"
-git branch -M main
-git remote add origin git@github.com:<user>/<repo>.git
-git push -u origin main
+git push origin main
 ```
 
-Then in the repo: Settings, Pages, Source "Deploy from a branch", branch `main`, folder
-`/ (root)`. The app appears at `https://<user>.github.io/<repo>/` within a minute or two.
+One-time setup in the repo: Settings, Pages, Source "Deploy from a branch", branch
+`gh-pages`, folder `/ (root)`. The branch appears after the first successful run. The app
+is then served at `https://<user>.github.io/<repo>/` within a minute or two.
 
-Every path in the app is relative, so the `/<repo>/` subpath works without changes.
+Only the built folder is published, so the tooling and the README stay out of the deployed
+site, and `404.html` is a copy of the app shell so any unknown path still boots. Every
+path in the app is relative, so the `/<repo>/` subpath works without changes.
+
+A stale build stamp fails the deploy rather than shipping: `npm run validate` is the first
+step, so forgetting `npm run stamp` stops the release instead of leaving every installed
+app on the previous files.
 
 ## Changing content
 
-Edit or add a file in `data/decks/`, register it in `data/decks/index.json`, add the path
-to `ASSETS` in `sw.js`, then run `npm run stamp`. `npm run validate` fails if you forget
-any of those, which matters: an unstamped service worker keeps serving the old files to
-every device that already installed the app.
+Edit or add a file in `data/decks/`, register it in `data/decks/index.json`, then run
+`npm run stamp`. There is no deck list to maintain in `sw.js`: it reads
+`data/decks/index.json` when it installs and precaches whatever is registered there, and
+`npm run stamp` expands the same index so a deck edit still changes the build hash.
+`npm run validate` fails if you forget to stamp, which matters: an unstamped service
+worker keeps serving the old files to every device that already installed the app.
+
+Anything that is *not* a deck — a new script, an icon, a stylesheet — still belongs in the
+`SHELL` list in `sw.js`, and `npm run validate` fails until it is there.
 
 Vocab cards:
 

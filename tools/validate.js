@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, relative, posix } from 'node:path';
-import { buildHash, currentBuild } from './build-hash.js';
+import { buildHash, currentBuild, readAssets } from './build-hash.js';
 
 const root = resolve(import.meta.dirname, '..');
 const decksDir = join(root, 'data', 'decks');
@@ -121,25 +121,27 @@ async function walk(dir, out) {
 }
 
 async function checkServiceWorker() {
-  const src = await readFile(join(root, 'sw.js'), 'utf8');
-  const block = src.match(/const ASSETS = \[([\s\S]*?)\];/);
-  if (!block) {
-    fail('sw.js: could not find the ASSETS list');
+  // The same expansion the worker does at install time: SHELL plus every deck
+  // registered in the deck index, so a deck only has to be registered once.
+  let assets;
+  try {
+    assets = await readAssets();
+  } catch (err) {
+    fail(err.message);
     return;
   }
-  const assets = (block[1].match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
   const listed = new Set(assets.map((a) => a.replace(/^\.\//, '')));
 
   for (const asset of assets) {
     const rel = asset.replace(/^\.\//, '');
     if (rel === '') continue;
-    if (!existsSync(join(root, rel))) fail('sw.js: precaches "' + asset + '" but that file does not exist');
+    if (!existsSync(join(root, rel))) fail('precached "' + asset + '" does not exist (sw.js SHELL, or a deck in the deck index)');
   }
   if (!listed.has('')) fail('sw.js: should precache "./" so the bare URL works offline');
 
   for (const file of await walk(root, [])) {
     if (NOT_CACHED.has(file)) continue;
-    if (!listed.has(file)) fail('sw.js: "' + file + '" exists but is not precached, so it will be missing offline');
+    if (!listed.has(file)) fail('sw.js: "' + file + '" exists but is not precached, so it will be missing offline. Add it to SHELL, or register a deck in data/decks/index.json.');
   }
   notes.push('  service worker precaches ' + assets.length + ' files');
 
