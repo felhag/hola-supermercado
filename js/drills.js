@@ -92,7 +92,7 @@ function verdict(area, correct, solution, onAnswer, detail, label) {
     onclick: () => onAnswer(correct)
   });
   render(area, [
-    el('div', { class: 'card' }, [
+    el('div', { class: 'card feedback ' + (correct ? 'ok' : 'no') }, [
       el('div', {
         class: 'verdict ' + (correct ? 'ok' : 'no'),
         text: label || (correct ? 'Correct' : 'Not quite')
@@ -115,7 +115,7 @@ function flash(view, card, onAnswer) {
     const again = el('button', { class: 'btn bad', text: 'Again', onclick: () => onAnswer(false) });
     const got = el('button', { class: 'btn good', text: 'Got it', onclick: () => onAnswer(true) });
     render(area, [
-      el('div', { class: 'card' }, [
+      el('div', { class: 'card feedback' }, [
         el('div', { class: 'answer-word', text: target(card) }),
         card.note ? el('div', { class: 'small muted', text: card.note }) : null
       ]),

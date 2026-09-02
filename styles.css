@@ -52,11 +52,27 @@ p { margin: 0 0 12px; }
 .topbar {
   position: sticky; top: 0; z-index: 10;
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top));
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-.topbar-title { flex: 1; font-weight: 500; }
+/* Logo and title are one home button: tapping the app's own name is the way
+   back, so the whole left side of the bar is the target. The label stays
+   "Home" for a screen reader even as the title text follows the screen. */
+.brand {
+  flex: 1; min-width: 0; min-height: 44px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0; margin: 0; font: inherit; text-align: left;
+  background: none; border: 0; border-radius: var(--radius);
+  color: var(--text); cursor: pointer;
+}
+.brand:hover .topbar-title { color: var(--accent); }
+.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.brand-logo { width: 30px; height: 30px; flex: none; border-radius: 8px; }
+.topbar-title {
+  flex: 1; min-width: 0; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .topbar-right { display: flex; align-items: center; gap: 8px; }
 .icon-btn {
   width: 40px; height: 40px; flex: none;
@@ -114,9 +130,23 @@ button.btn.ghost { background: transparent; }
 }
 .deck[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .deck-name { font-weight: 500; }
-.bar { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+.bar { position: relative; height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
 .bar > span { display: block; height: 100%; background: var(--accent); }
+/* A deck bar stacks two fills: everything under way in a lighter accent, the
+   solid share painted over it in full strength. */
+.bar > span.soft { opacity: .4; }
+.bar > span.strong { position: absolute; left: 0; top: 0; }
 .check { width: 22px; flex: none; text-align: center; color: var(--accent); }
+
+/* Bulk deck picking: quieter than the decks themselves, so it reads as a
+   shortcut rather than another deck row. */
+.pick-row { display: flex; gap: 10px; margin-bottom: 10px; }
+button.btn.pick {
+  min-height: 40px; padding: 8px 12px;
+  font-size: 14px; font-weight: 400; color: var(--muted);
+  background: transparent;
+}
+button.btn.pick:disabled { opacity: .4; }
 
 .prompt {
   min-height: 128px; display: flex; flex-direction: column;
@@ -138,6 +168,89 @@ input.text:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .verdict { font-weight: 500; }
 .verdict.ok { color: var(--good); }
 .verdict.no { color: var(--bad); }
+
+/* Finishing a card is the moment worth marking: the answer card lands with a
+   small pop, and a wrong one shakes its head first. Both are short enough to
+   be over before the Continue button is reachable. */
+@keyframes card-pop {
+  from { opacity: 0; transform: scale(.96) translateY(6px); }
+  60% { transform: scale(1.015) translateY(0); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes card-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px); }
+  35% { transform: translateX(6px); }
+  55% { transform: translateX(-4px); }
+  75% { transform: translateX(2px); }
+}
+.card.feedback { animation: card-pop .22s ease-out both; }
+.card.feedback.ok { border-color: var(--good); }
+.card.feedback.no {
+  border-color: var(--bad);
+  animation: card-pop .16s ease-out both, card-shake .34s ease-in-out .1s both;
+}
+/* The next prompt slides in behind it, so one card clearly gives way to another. */
+.card.prompt { animation: card-pop .2s ease-out both; }
+
+/* Finishing a whole session earns more than the per-card pop: the result card
+   swings in, the cheer lands a beat later, and confetti falls over the page. */
+@keyframes result-in {
+  from { opacity: 0; transform: scale(.9) translateY(14px); }
+  55% { transform: scale(1.03) translateY(0); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes cheer-in {
+  from { opacity: 0; transform: scale(.6) rotate(-6deg); }
+  60% { transform: scale(1.12) rotate(2deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+/* Springs out to the score and wobbles into place. The overshoot is real
+   keyframes rather than a bezier so the bounce is the same everywhere. */
+@keyframes score-grow {
+  from { transform: scaleX(0); }
+  65% { transform: scaleX(1.08); }
+  82% { transform: scaleX(.96); }
+  93% { transform: scaleX(1.02); }
+  to { transform: scaleX(1); }
+}
+@keyframes confetti-fall {
+  0% { opacity: 0; transform: translate3d(0, -12vh, 0) rotate(0); }
+  8% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--drift, 0), 104vh, 0) rotate(var(--spin, 360deg)); }
+}
+
+.card.result { animation: result-in .42s cubic-bezier(.2, .9, .3, 1.2) both; }
+.bar.score { height: 10px; margin: 16px 0 2px; }
+.bar.score > span { transform-origin: left center; animation: score-grow .62s ease-out .3s both; }
+.bar.score > span.high { background: var(--good); }
+.bar.score > span.mid { background: var(--accent); }
+.bar.score > span.low { background: var(--bad); }
+
+.cheer {
+  font-size: 26px; font-weight: 500; color: var(--accent); margin-bottom: 10px;
+  animation: cheer-in .4s cubic-bezier(.2, .9, .3, 1.4) .22s both;
+}
+
+/* Pure decoration over the whole page: never in the way of a tap, never in the
+   accessibility tree, gone from the DOM once the burst is over. */
+.confetti { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 20; }
+.confetti .bit {
+  position: absolute; top: 0; width: 9px; height: 14px;
+  animation-name: confetti-fall; animation-timing-function: linear; animation-fill-mode: both;
+}
+.confetti .c0 { background: var(--accent); }
+.confetti .c1 { background: var(--good); }
+.confetti .c2 { background: #e8b53a; }
+.confetti .c3 { background: #d1568c; }
+.confetti .c4 { background: #6f8fe8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card.feedback, .card.feedback.no, .card.prompt,
+  .card.result, .cheer, .bar.score > span { animation: none; }
+  .confetti { display: none; }
+}
 .error { color: var(--bad); font-size: 14px; }
 
 .progress { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }

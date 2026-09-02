@@ -30,3 +30,12 @@ export function isDue(state, now = Date.now()) {
 export function isNew(state) {
   return state.seen === 0;
 }
+
+// Progress has to move the first time a card is answered, or an hour of drilling
+// looks like it achieved nothing: only box 4 and up count as solid, and nothing
+// reaches box 4 in a single session. Box 1 once seen is a fifth of the way,
+// box 5 is the whole way, and a wrong answer costs the boxes it drops.
+export function strength(state) {
+  if (isNew(state)) return 0;
+  return state.box / MAX_BOX;
+}

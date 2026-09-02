@@ -1,7 +1,7 @@
 import { store, getSettings, saveSettings, addHistory, getHistory } from './store.js';
 import { loadIndex, loadDeck, shuffle } from './content.js';
-import { newState, grade, isDue, isNew, MAX_BOX } from './srs.js';
-import { el, render, plural } from './ui.js';
+import { newState, grade, isDue, isNew, strength, MAX_BOX } from './srs.js';
+import { el, render, plural, confetti, countUp } from './ui.js';
 import { pickKind, renderDrill, KIND_LABEL } from './drills.js';
 
 const VERSION = '1.0.0';
@@ -18,7 +18,8 @@ const app = {
   settings: null,
   session: null,
   drill: null,
-  installPrompt: null
+  installPrompt: null,
+  route: 'home'
 };
 
 function stateFor(card) {
@@ -30,12 +31,17 @@ function stateFor(card) {
   return state;
 }
 
+// null is the default and means every deck, including any added later. A list
+// is an explicit pick, and an empty list is an explicit none, which is what
+// "Deselect all" leaves behind.
 function selectedDecks() {
   const ids = new Set(app.decks.map((d) => d.meta.id));
   const chosen = app.settings.decks;
-  if (!chosen || !chosen.length) return ids;
+  if (!chosen) return ids;
   const filtered = chosen.filter((id) => ids.has(id));
-  return new Set(filtered.length ? filtered : ids);
+  // Ids that no longer exist are stale settings, not a choice to drill nothing.
+  if (!filtered.length && chosen.length) return ids;
+  return new Set(filtered);
 }
 
 // With the schedule off, nothing is held back for later: every card in the
@@ -49,14 +55,20 @@ function deckStats(deck, now) {
   let due = 0;
   let fresh = 0;
   let learned = 0;
+  let points = 0;
   for (const card of deck.cards) {
     const state = stateFor(card);
     if (isNew(state)) fresh += 1;
     else if (isDue(state, now)) due += 1;
     if (state.box >= 4) learned += 1;
+    points += strength(state);
   }
   const total = deck.cards.length;
-  return { due, fresh, learned, total, ready: scheduleOff() ? total : due + fresh };
+  return {
+    due, fresh, learned, total, points,
+    progress: total ? points / total : 0,
+    ready: scheduleOff() ? total : due + fresh
+  };
 }
 
 /* ---------- home ---------- */
@@ -64,12 +76,14 @@ function deckStats(deck, now) {
 function home() {
   app.session = null;
   app.drill = null;
+  app.route = 'home';
   titleEl.textContent = 'Hola supermercado';
 
   const now = Date.now();
   const selected = selectedDecks();
   let ready = 0;
-  let learned = 0;
+  let solid = 0;
+  let points = 0;
   let total = 0;
 
   const deckRows = app.decks.map((deck) => {
@@ -77,13 +91,17 @@ function home() {
     const on = selected.has(deck.meta.id);
     if (on) {
       ready += stats.ready;
-      learned += stats.learned;
+      solid += stats.learned;
+      points += stats.points;
       total += stats.total;
     }
-    const pct = Math.round((stats.learned / stats.total) * 100);
+    // Two numbers, two layers on the bar: how far the deck has come overall,
+    // and how much of it is already solid.
+    const pct = Math.round(stats.progress * 100);
+    const solidPct = Math.round((stats.learned / stats.total) * 100);
     const line = scheduleOff()
-      ? stats.total + ' cards, all available, ' + pct + '% solid'
-      : stats.total + ' cards, ' + stats.due + ' due, ' + stats.fresh + ' new, ' + pct + '% solid';
+      ? stats.total + ' cards, all available, ' + pct + '% learned'
+      : stats.total + ' cards, ' + stats.due + ' due, ' + stats.fresh + ' new, ' + pct + '% learned';
     return el('button', {
       class: 'deck',
       'aria-pressed': on ? 'true' : 'false',
@@ -93,7 +111,10 @@ function home() {
       el('span', { class: 'grow' }, [
         el('div', { class: 'deck-name', text: deck.meta.name }),
         el('div', { class: 'tiny muted', text: line }),
-        el('div', { class: 'bar' }, [el('span', { style: 'width:' + pct + '%' })])
+        el('div', { class: 'bar' }, [
+          el('span', { class: 'soft', style: 'width:' + pct + '%' }),
+          el('span', { class: 'strong', style: 'width:' + solidPct + '%' })
+        ])
       ])
     ]);
   });
@@ -101,7 +122,9 @@ function home() {
   const planned = Math.min(ready, app.settings.sessionSize);
   const start = el('button', {
     class: 'btn primary',
-    text: planned ? 'Start session, ' + plural(planned, 'card', 'cards') : 'Nothing due right now',
+    text: planned
+      ? 'Start session, ' + plural(planned, 'card', 'cards')
+      : (total === 0 ? 'Pick a deck to start' : 'Nothing due right now'),
     disabled: planned === 0,
     onclick: startSession
   });
@@ -110,11 +133,17 @@ function home() {
     el('div', { class: 'card' }, [
       el('div', { class: 'stat' }, [
         el('div', {}, [el('b', { text: String(ready) }), el('span', { class: 'small muted', text: 'ready now' })]),
-        el('div', {}, [el('b', { text: String(learned) }), el('span', { class: 'small muted', text: 'solid' })]),
+        el('div', {}, [
+          el('b', { text: (total ? Math.round((points / total) * 100) : 0) + '%' }),
+          el('span', { class: 'small muted', text: 'learned, ' + solid + ' solid' })
+        ]),
         el('div', {}, [el('b', { text: String(total) }), el('span', { class: 'small muted', text: 'cards picked' })])
       ])
     ]),
     start,
+    total === 0
+      ? el('p', { class: 'small muted', text: 'No decks picked. Tap one below, or use Select all.' })
+      : null,
     planned === 0 && total > 0
       ? el('p', { class: 'small muted', text: 'Everything you picked is scheduled for later. Add a deck below, come back tomorrow, or switch off spacing in settings.' })
       : null,
@@ -122,11 +151,22 @@ function home() {
       ? el('p', { class: 'small muted', text: 'Spacing is off, so every card stays available. Weakest words come up first.' })
       : null,
     el('h2', { text: 'Decks' }),
-    el('p', { class: 'small muted', text: 'A deck is a themed pile of cards. Tap one to include or exclude it.' }),
+    el('p', { class: 'small muted', text: 'A deck is a themed pile of cards. Tap one to include or exclude it. The bar fills as cards climb the boxes, and the darker part is what is already solid.' }),
+    el('div', { class: 'pick-row' }, [
+      el('button', {
+        class: 'btn pick',
+        text: 'Select all',
+        disabled: selected.size === app.decks.length,
+        onclick: () => setDecks(null)
+      }),
+      el('button', {
+        class: 'btn pick',
+        text: 'Deselect all',
+        disabled: selected.size === 0,
+        onclick: () => setDecks([])
+      })
+    ]),
     el('div', {}, deckRows),
-    app.installPrompt
-      ? el('button', { class: 'btn ghost', text: 'Install on this device', onclick: install })
-      : null,
     app.db && app.db.degraded
       ? el('p', { class: 'small muted', text: 'This browser refused IndexedDB, so progress is kept in localStorage instead.' })
       : null
@@ -135,13 +175,13 @@ function home() {
 
 async function toggleDeck(id) {
   const selected = selectedDecks();
-  if (selected.has(id)) {
-    if (selected.size === 1) return;
-    selected.delete(id);
-  } else {
-    selected.add(id);
-  }
-  app.settings.decks = Array.from(selected);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  await setDecks(Array.from(selected));
+}
+
+async function setDecks(ids) {
+  app.settings.decks = ids;
   await saveSettings(app.settings);
   home();
 }
@@ -158,13 +198,19 @@ function buildQueue() {
     const state = stateFor(card);
     if (ignore || isDue(state, now)) items.push({ card, state });
   }
+  // Sort before slicing, so shuffle first: sorting is stable, which means cards
+  // that tie on priority keep the order they came in, and they came in deck by
+  // deck. Ties are the normal case (every new card is box 1, last 0), so an
+  // unshuffled sort filled the whole session from the first deck picked and
+  // never reached the others. Shuffling first turns those ties into a random
+  // draw across the decks while real differences in priority still win.
   if (ignore) {
     // Nothing is gated by a date, so lead with the weakest and least recently
     // seen instead of whatever happens to be at the top of the deck.
-    const ranked = items.slice().sort((a, b) => (a.state.box - b.state.box) || (a.state.last - b.state.last));
+    const ranked = shuffle(items).sort((a, b) => (a.state.box - b.state.box) || (a.state.last - b.state.last));
     return shuffle(ranked.slice(0, app.settings.sessionSize));
   }
-  const reviews = items.filter((it) => !isNew(it.state)).sort((a, b) => a.state.due - b.state.due);
+  const reviews = shuffle(items.filter((it) => !isNew(it.state))).sort((a, b) => a.state.due - b.state.due);
   const fresh = shuffle(items.filter((it) => isNew(it.state)));
   return shuffle(reviews.concat(fresh).slice(0, app.settings.sessionSize));
 }
@@ -176,6 +222,7 @@ function startSession() {
     return;
   }
   app.session = { queue, index: 0, right: 0, wrong: 0, started: Date.now() };
+  app.route = 'session';
   titleEl.textContent = 'Session';
   renderSession();
 }
@@ -262,19 +309,63 @@ async function finishSession() {
       });
     } catch (err) { /* history is a nicety, never block on it */ }
   }
+  app.route = 'done';
   titleEl.textContent = 'Done';
   const accuracy = answered ? Math.round((session.right / answered) * 100) : 0;
+
+  // The numbers tick up, so they are hidden from the live region and the final
+  // result is announced once instead of on every frame.
+  const answeredEl = el('b', { 'aria-hidden': 'true', text: '0' });
+  const accuracyEl = el('b', { 'aria-hidden': 'true', text: '0%' });
+
   render(view, [
-    el('div', { class: 'card' }, [
+    el('div', { class: 'card result' }, [
       el('h2', { text: answered ? 'Session done' : 'Session ended' }),
+      answered ? el('div', { class: 'cheer', text: cheerFor(accuracy) }) : null,
       el('div', { class: 'stat' }, [
-        el('div', {}, [el('b', { text: String(answered) }), el('span', { class: 'small muted', text: 'answered' })]),
-        el('div', {}, [el('b', { text: accuracy + '%' }), el('span', { class: 'small muted', text: 'correct' })])
-      ])
+        el('div', {}, [answeredEl, el('span', { class: 'small muted', text: 'answered' })]),
+        el('div', {}, [accuracyEl, el('span', { class: 'small muted', text: 'correct' })])
+      ]),
+      // Decoration for the numbers above, which the live region already reads
+      // out, so it stays out of the accessibility tree.
+      answered
+        ? el('div', { class: 'bar score', 'aria-hidden': 'true' }, [
+            el('span', { class: scoreTone(accuracy), style: 'width:' + accuracy + '%' })
+          ])
+        : null,
+      el('span', { class: 'sr-only', text: answered + ' answered, ' + accuracy + '% correct' })
     ]),
-    el('button', { class: 'btn primary', text: 'Another round', onclick: startSession }),
-    el('button', { class: 'btn ghost', text: 'Back to decks', onclick: home })
+    el('div', { class: 'stack' }, [
+      el('button', { class: 'btn primary', text: 'Another round', onclick: startSession }),
+      el('button', { class: 'btn ghost', text: 'Back to decks', onclick: home })
+    ])
   ]);
+
+  countUp(answeredEl, answered, '');
+  countUp(accuracyEl, accuracy, '%');
+  // A session ended at zero cards is not worth celebrating, and a rough one
+  // gets a smaller party than a clean sweep.
+  confetti(answered ? partySize(accuracy) : 0);
+}
+
+function cheerFor(accuracy) {
+  if (accuracy === 100) return '¡Perfecto!';
+  if (accuracy >= 80) return '¡Muy bien!';
+  if (accuracy >= 50) return '¡Bien hecho!';
+  return '¡Sigue así!';
+}
+
+function scoreTone(accuracy) {
+  if (accuracy >= 80) return 'high';
+  if (accuracy >= 50) return 'mid';
+  return 'low';
+}
+
+function partySize(accuracy) {
+  if (accuracy >= 90) return 80;
+  if (accuracy >= 70) return 55;
+  if (accuracy >= 40) return 32;
+  return 16;
 }
 
 /* ---------- settings ---------- */
@@ -282,6 +373,7 @@ async function finishSession() {
 async function settingsView() {
   app.session = null;
   app.drill = null;
+  app.route = 'settings';
   titleEl.textContent = 'Settings';
 
   const history = await getHistory();
@@ -349,6 +441,12 @@ async function settingsView() {
     location.reload();
   };
 
+  // Only offered while the browser has an install prompt to give: already
+  // installed, or a browser that never fires the event, means no button.
+  const installBtn = app.installPrompt
+    ? el('button', { class: 'btn ghost', text: 'Install on this device', onclick: install })
+    : null;
+
   const rows = history.slice(-8).reverse().map((h) => el('div', {
     class: 'small muted',
     text: new Date(h.at).toLocaleString() + ', ' + h.answered + ' cards, '
@@ -374,6 +472,10 @@ async function settingsView() {
     rows.length ? el('div', {}, rows) : el('p', { class: 'small muted', text: 'No sessions yet.' }),
     el('h2', { text: 'Offline' }),
     el('p', { class: 'small muted', id: 'offline-detail', text: 'Checking...' }),
+    installBtn,
+    installBtn
+      ? el('p', { class: 'tiny muted', text: 'Adds the app to your home screen so it opens on its own, without a browser bar.' })
+      : null,
     forceUpdate,
     el('p', { class: 'tiny muted', text: 'Use this if the app seems to be running an old version. Your progress is kept, only the cached files are fetched again.' }),
     el('h2', { text: 'Danger zone' }),
@@ -453,17 +555,22 @@ function registerSw() {
   });
 }
 
-function install() {
+async function install() {
   const prompt = app.installPrompt;
   if (!prompt) return;
   app.installPrompt = null;
   prompt.prompt();
+  try { await prompt.userChoice; } catch (err) { /* dismissed, nothing to do */ }
+  // The prompt is single use, so the button has to go whatever the answer was.
+  if (app.route === 'settings') settingsView();
 }
 
+// The event can arrive at any moment, so only redraw a screen that is showing
+// the button. Redrawing mid-session or over the results would lose them.
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   app.installPrompt = event;
-  if (!app.session) home();
+  if (app.route === 'settings') settingsView();
 });
 
 /* ---------- boot ---------- */

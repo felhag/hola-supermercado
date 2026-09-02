@@ -1,7 +1,7 @@
 // Stamped by "npm run stamp" with a hash of every precached file. "npm run
 // validate" fails when it is stale, because an unchanged service worker keeps
 // serving the old code from cache and app changes never reach the device.
-const BUILD = '46491c8363';
+const BUILD = 'd7ceace8e6';
 const CACHE = 'es-trainer-' + BUILD;
 
 const ASSETS = [
@@ -27,7 +27,13 @@ const ASSETS = [
   './data/decks/time.json',
   './data/decks/adjectives.json',
   './data/decks/phrases.json',
-  './data/decks/sentences.json'
+  './data/decks/shopping.json',
+  './data/decks/health.json',
+  './data/decks/work.json',
+  './data/decks/weather.json',
+  './data/decks/connectors.json',
+  './data/decks/sentences.json',
+  './data/decks/conjugations.json'
 ];
 
 // Cache each asset on its own so one bad path cannot fail the whole install and
