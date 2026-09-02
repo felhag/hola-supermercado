@@ -9,6 +9,12 @@
     { "id": "home", "name": "Home and things", "file": "home.json", "kind": "vocab" },
     { "id": "time", "name": "Time and numbers", "file": "time.json", "kind": "vocab" },
     { "id": "adjectives", "name": "Adjectives", "file": "adjectives.json", "kind": "vocab" },
-    { "id": "sentences", "name": "Sentences and grammar", "file": "sentences.json", "kind": "cloze" }
+    { "id": "shopping", "name": "Shopping and money", "file": "shopping.json", "kind": "vocab" },
+    { "id": "health", "name": "Health and the body", "file": "health.json", "kind": "vocab" },
+    { "id": "work", "name": "Work and study", "file": "work.json", "kind": "vocab" },
+    { "id": "weather", "name": "Weather and nature", "file": "weather.json", "kind": "vocab" },
+    { "id": "connectors", "name": "Linking words and questions", "file": "connectors.json", "kind": "vocab" },
+    { "id": "sentences", "name": "Sentences and grammar", "file": "sentences.json", "kind": "cloze" },
+    { "id": "conjugations", "name": "Verb conjugations", "file": "conjugations.json", "kind": "cloze" }
   ]
 }

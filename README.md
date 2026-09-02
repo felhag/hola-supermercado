@@ -1,8 +1,7 @@
 # Hola supermercado
 
 A static, offline-first Spanish trainer. No build step, no dependencies, no network at
-runtime. 455 cards across nine decks, four drill types, Leitner scheduling, progress in
-IndexedDB.
+runtime. Leitner scheduling, progress in IndexedDB.
 
 ## Files
 
@@ -39,8 +38,6 @@ There are no dependencies, so `npm install` downloads nothing and is optional. T
 server and the validator are plain Node scripts in `tools/`, which keeps the project
 usable on a plane.
 
-Without Node, `powershell -ExecutionPolicy Bypass -File .\serve.ps1` does the same job.
-
 ## Validate the content
 
 ```
@@ -68,16 +65,6 @@ Then in the repo: Settings, Pages, Source "Deploy from a branch", branch `main`,
 `/ (root)`. The app appears at `https://<user>.github.io/<repo>/` within a minute or two.
 
 Every path in the app is relative, so the `/<repo>/` subpath works without changes.
-
-## Before you fly
-
-1. Open the app online, on the device you will actually use.
-2. Wait for the badge in the top right to read **offline ready**. It asks the service
-   worker how many of the 23 precached files actually landed, so it is a real check
-   rather than a guess. Settings shows the long version of the same status.
-3. Install it: Chrome and Edge show "Install on this device" on the home screen, or use
-   the browser menu. On iOS Safari, Share then "Add to Home Screen".
-4. Optional: switch on airplane mode and open it once, to be sure.
 
 ## Changing content
 
@@ -145,10 +132,3 @@ Typed answers are matched leniently, so accents, articles, punctuation and the E
 Settings can override all of it: "Which way round" pins every card to one direction, and
 the drill type override gives flashcards only for a fast passive pass, multiple choice
 only, or typing only.
-
-## Cramming on a plane
-
-Settings, "Waiting between reviews", set to off. Every card in the chosen decks stays
-available no matter when it is next due, weakest and least recently seen first, so a long
-flight does not run dry after twenty cards. Boxes and due dates still advance underneath,
-so switching spacing back on resumes the real schedule with nothing lost.
